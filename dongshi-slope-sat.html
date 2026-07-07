@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-Hant"><head><meta charset="utf-8">
 <title>東勢・大茅埔・新社 3D 地形模型 — 等高線／衛星</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#0e1420;font-family:'Microsoft JhengHei','PingFang TC',sans-serif;color:#e8e8e8}
+html,body{margin:0;height:100%;overflow:hidden;background:#0e1420;font-family:'Microsoft JhengHei','PingFang TC',sans-serif;color:#e8e8e8;touch-action:none}
+canvas{display:block;touch-action:none}
 .panel{position:fixed;background:rgba(16,22,36,.82);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px;z-index:10}
 #title{top:14px;left:14px;max-width:440px}
 #title h1{margin:0 0 2px;font-size:16px;color:#ffd479}
@@ -30,6 +31,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0e1420;font-family:'M
 #north{font-weight:bold;color:#ff8a7a;font-size:15px}
 #src{position:fixed;bottom:2px;left:50%;transform:translateX(-50%);font-size:10px;color:#66708a;z-index:10}
 #loading{position:fixed;inset:0;background:#0e1420;display:flex;align-items:center;justify-content:center;font-size:16px;color:#aab4c8;z-index:99}
+@media (pointer:coarse),(max-width:600px){
+  #title{max-width:calc(100vw - 24px)} #title h1{font-size:14px} #title .sub{display:none}
+  #ctrl{top:auto;bottom:64px;right:10px;width:150px} #ctrl .hint{display:none}
+  #legend{font-size:10px} #legend .bar{height:78px} #legend .cap{font-size:11px}
+  #northbox{width:34px;height:34px;bottom:12px} #north{font-size:13px}
+  #hover{font-size:11px;max-width:92vw;padding:5px 9px}
+  #src{font-size:8.5px;max-width:96vw;text-align:center}
+}
 </style></head><body>
 <div id="loading">載入地形・衛星影像中…</div>
 <div id="title" class="panel"><h1>東勢・大茅埔・新社 3D 地形模型</h1>
@@ -1115,6 +1124,7 @@ var DEM_PNG="iVBORw0KGgoAAAANSUhEUgAABtEAAAdsCAIAAABWHjTeAAEAAElEQVR42sT93XYcyY4
 (function(){
 'use strict';
 var W=META.W,H=META.H,KX=META.km_x,KY=META.km_y,EMIN=META.emin,EMAX=META.emax;
+var isMobile=(window.matchMedia&&window.matchMedia('(pointer:coarse)').matches)||Math.min(innerWidth,innerHeight)<640;
 function boot(heights){
 var minElev=1e9,maxElev=-1e9;
 for(var k=0;k<W*H;k++){ var e=heights[k]; if(e<minElev)minElev=e; if(e>maxElev)maxElev=e; }
@@ -1141,17 +1151,16 @@ function baseColor(e){ if(e<=HRAMP[0][0]) return HRAMP[0][1];
   for(var i=1;i<HRAMP.length;i++){ if(e<=HRAMP[i][0]){ var a=HRAMP[i-1],b=HRAMP[i],t=(e-a[0])/(b[0]-a[0]);
     return [a[1][0]+(b[1][0]-a[1][0])*t,a[1][1]+(b[1][1]-a[1][1])*t,a[1][2]+(b[1][2]-a[1][2])*t]; } }
   return HRAMP[HRAMP.length-1][1]; }
-/* baked hillshade — reveals river-terrace risers (河階崖) independent of live light.
-   Light from NW at ~32deg; range clamped to stay soft (not 刺眼). */
+/* baked hillshade — reveals river-terrace risers (河階崖) independent of live light. */
 function hillshade(i,j){
   var jl=j>0?j-1:j, jr=j<W-1?j+1:j, iu=i>0?i-1:i, id=i<H-1?i+1:i;
   var gx=(heights[i*W+jr]-heights[i*W+jl])/((jr-jl)*DXm);
   var gz=(heights[id*W+j]-heights[iu*W+j])/((id-iu)*DZm);
-  var VE=1.7; gx*=VE; gz*=VE;                 /* mild vertical bias so subtle steps register */
+  var VE=1.7; gx*=VE; gz*=VE;
   var nl=Math.sqrt(gx*gx+gz*gz+1), nx=-gx/nl, ny=1/nl, nz=-gz/nl;
   var lx=-0.60, ly=0.53, lz=0.60, ll=Math.sqrt(lx*lx+ly*ly+lz*lz); lx/=ll; ly/=ll; lz/=ll;
   var d=nx*lx+ny*ly+nz*lz; if(d<0)d=0;
-  return 0.80+0.40*d;                          /* ~0.80 (shadowed riser) .. 1.10 (lit tread) */
+  return 0.80+0.40*d;
 }
 /* geometry */
 var NT=W*H,oNW=NT,oSW=NT+2*W,oWW=NT+4*W,oEW=NT+4*W+2*H,oBASE=NT+4*W+4*H,NV=oBASE+4;
@@ -1195,8 +1204,8 @@ geo.setIndex(new THREE.BufferAttribute(index,1));
 var scene=new THREE.Scene(); scene.background=new THREE.Color(0x0e1420);
 scene.fog=new THREE.Fog(0x0e1420,55,150);
 var camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,500);
-var renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight);
+var renderer=new THREE.WebGLRenderer({antialias:!isMobile});
+renderer.setPixelRatio(Math.min(devicePixelRatio,isMobile?1.5:2)); renderer.setSize(innerWidth,innerHeight);
 renderer.outputEncoding=THREE.sRGBEncoding; document.body.appendChild(renderer.domElement);
 var tex=new THREE.TextureLoader().load('dongshi-sat.jpg');
 tex.flipY=false; tex.encoding=THREE.sRGBEncoding; tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
@@ -1284,7 +1293,7 @@ function applyExaggeration(withNormals){
   groundMarkers.forEach(function(m){ m.obj.position.set(m.x,m.ground*s+0.006,m.z); });
 }
 applyExaggeration(true);
-/* hover */
+/* hover / tap query */
 var raycaster=new THREE.Raycaster(),mouseNDC=new THREE.Vector2(),hoverEl=document.getElementById('hover');
 function terrainYAt(x,z){ return inside(x,z)?sampleElev(x,z)*0.001*EX:NaN; }
 function pickTerrain(){
@@ -1297,15 +1306,25 @@ function pickTerrain(){
     if(isNaN(ty2)||y2>ty2) lo=mid; else hi=mid; }
   var tf=(lo+hi)/2; return {x:o.x+d.x*tf,z:o.z+d.z*tf};
 }
-var lastMove=0;
-renderer.domElement.addEventListener('mousemove',function(ev){
-  var now=performance.now(); if(now-lastMove<70) return; lastMove=now;
-  mouseNDC.x=ev.clientX/innerWidth*2-1; mouseNDC.y=-(ev.clientY/innerHeight)*2+1;
+function showReadout(cx,cy,autohide){
+  mouseNDC.x=cx/innerWidth*2-1; mouseNDC.y=-(cy/innerHeight)*2+1;
   var p=pickTerrain();
   if(p){ var e2=sampleElev(p.x,p.z),sl=slopeAtXZ(p.x,p.z); hoverEl.style.display='block';
     hoverEl.textContent='海拔 '+Math.round(e2)+' m ｜ 坡度 '+sl.toFixed(1)+'° ｜ '+zToLat(p.z).toFixed(4)+'°N, '+xToLon(p.x).toFixed(4)+'°E';
-  } else hoverEl.style.display='none';
+    if(autohide){ clearTimeout(showReadout._t); showReadout._t=setTimeout(function(){hoverEl.style.display='none';},4500); }
+  } else if(!autohide) hoverEl.style.display='none';
+}
+var lastMove=0;
+renderer.domElement.addEventListener('mousemove',function(ev){
+  if(isMobile) return;
+  var now=performance.now(); if(now-lastMove<70) return; lastMove=now;
+  showReadout(ev.clientX,ev.clientY,false);
 });
+/* tap to query (mobile): fire only on a stationary tap, not after a drag */
+var ptId=null,ptX=0,ptY=0,ptMoved=false;
+renderer.domElement.addEventListener('pointerdown',function(ev){ if(ev.pointerType==='mouse')return; ptId=ev.pointerId; ptX=ev.clientX; ptY=ev.clientY; ptMoved=false; });
+renderer.domElement.addEventListener('pointermove',function(ev){ if(ev.pointerId!==ptId)return; if(Math.abs(ev.clientX-ptX)+Math.abs(ev.clientY-ptY)>10) ptMoved=true; });
+renderer.domElement.addEventListener('pointerup',function(ev){ if(ev.pointerId!==ptId)return; if(!ptMoved) showReadout(ev.clientX,ev.clientY,true); ptId=null; });
 /* UI */
 var exSlider=document.getElementById('ex'),exVal=document.getElementById('exval');
 exSlider.addEventListener('input',function(){ EX=parseFloat(exSlider.value); exVal.textContent=EX.toFixed(1)+'×'; applyExaggeration(false); });
@@ -1335,6 +1354,13 @@ _img.onload=function(){
   var cx=cv.getContext('2d'); cx.drawImage(_img,0,0);
   var d=cx.getImageData(0,0,W,H).data, hgt=new Float32Array(W*H);
   for(var i=0;i<W*H;i++) hgt[i]=(d[i*4]*256+d[i*4+1])*META.scale;
+  /* on phones, decimate the terrain grid for performance (330万→约83万顶点) */
+  var STEP = isMobile ? 2 : 1;
+  if(STEP>1){
+    var gw=Math.floor((W-1)/STEP)+1, gh=Math.floor((H-1)/STEP)+1, g=new Float32Array(gw*gh);
+    for(var yy=0;yy<gh;yy++){ var sy=yy*STEP*W; for(var xx=0;xx<gw;xx++){ g[yy*gw+xx]=hgt[sy+xx*STEP]; } }
+    W=gw; H=gh; hgt=g;
+  }
   boot(hgt);
 };
 _img.onerror=function(){ document.getElementById('loading').textContent='高程影像載入失敗'; };
