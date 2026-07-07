@@ -33,7 +33,7 @@ canvas{display:block;touch-action:none}
 #loading{position:fixed;inset:0;background:#0e1420;display:flex;align-items:center;justify-content:center;font-size:16px;color:#aab4c8;z-index:99}
 @media (pointer:coarse),(max-width:600px){
   #title{max-width:calc(100vw - 24px)} #title h1{font-size:14px} #title .sub{display:none}
-  #ctrl{top:auto;bottom:64px;right:10px;width:150px} #ctrl .hint{display:none}
+  #ctrl{top:auto;bottom:64px;right:10px;width:150px} #ctrl .hint{font-size:10px;line-height:1.4}
   #legend{font-size:10px} #legend .bar{height:78px} #legend .cap{font-size:11px}
   #northbox{width:34px;height:34px;bottom:12px} #north{font-size:13px}
   #hover{font-size:11px;max-width:92vw;padding:5px 9px}
@@ -1125,6 +1125,9 @@ var DEM_PNG="iVBORw0KGgoAAAANSUhEUgAABtEAAAdsCAIAAABWHjTeAAEAAElEQVR42sT93XYcyY4
 'use strict';
 var W=META.W,H=META.H,KX=META.km_x,KY=META.km_y,EMIN=META.emin,EMAX=META.emax;
 var isMobile=(window.matchMedia&&window.matchMedia('(pointer:coarse)').matches)||Math.min(innerWidth,innerHeight)<640;
+(function(){var h=document.querySelector('#ctrl .hint'); if(h){ h.innerHTML = isMobile
+  ? '操作：單指拖曳＝旋轉，雙指＝縮放/平移，點一下地表看海拔・坡度。上方鈕切換等高線／衛星，勾選框開關地名/道路/水文。'
+  : '操作：左鍵拖曳＝旋轉，滾輪＝縮放，右鍵或方向鍵＝平移，滑鼠停在地表看海拔・坡度。上方鈕切換等高線／衛星，勾選框開關圖層。'; }})();
 function boot(heights){
 var minElev=1e9,maxElev=-1e9;
 for(var k=0;k<W*H;k++){ var e=heights[k]; if(e<minElev)minElev=e; if(e>maxElev)maxElev=e; }
