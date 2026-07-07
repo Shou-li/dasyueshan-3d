@@ -40,8 +40,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0e1420;font-family:'M
   <div class="seg"><button id="mode_cont" class="on">等高線</button><button id="mode_sat">衛星</button></div>
   <label>垂直誇張 <span id="exval">2.0×</span><input type="range" id="ex" min="0.5" max="4" step="0.1" value="2.0"></label>
   <div class="togs" style="margin-top:6px;font-size:12px"><label><input type="checkbox" id="ck_lab" checked> 地名</label><label><input type="checkbox" id="ck_road" checked> 道路</label><label><input type="checkbox" id="ck_wat" checked> 水文</label></div>
+  <button id="skyward" class="full">仰望高山</button>
   <button id="reset" class="full">重設視角</button>
-  <div class="hint">左鍵拖曳＝旋轉｜滾輪＝縮放｜右鍵或方向鍵＝平移</div>
+  <div class="hint">左鍵拖曳＝旋轉｜滾輪＝縮放｜右鍵或方向鍵＝平移<br>拖到最低＝地面仰視</div>
 </div>
 <div id="legend" class="panel">
   <div class="cap">高程（m）</div>
@@ -1116,9 +1117,10 @@ var DEM_PNG="iVBORw0KGgoAAAANSUhEUgAABtEAAAdsCAIAAABWHjTeAAEAAElEQVR42sT93XYcyY4
 'use strict';
 var W=META.W,H=META.H,KX=META.km_x,KY=META.km_y,EMIN=META.emin,EMAX=META.emax;
 function boot(heights){
-var minElev=1e9,maxElev=-1e9;
-for(var k=0;k<W*H;k++){ var e=heights[k]; if(e<minElev)minElev=e; if(e>maxElev)maxElev=e; }
+var minElev=1e9,maxElev=-1e9,hiIdx=0;
+for(var k=0;k<W*H;k++){ var e=heights[k]; if(e<minElev)minElev=e; if(e>maxElev){maxElev=e;hiIdx=k;} }
 var baseElev=minElev-150;
+var hiI=Math.floor(hiIdx/W),hiJ=hiIdx%W,hiX=(hiJ/(W-1)-0.5)*KX,hiZ=(hiI/(H-1)-0.5)*KY,hiV=maxElev;
 function lonToX(lon){ return ((lon-META.lon0)/(META.lon1-META.lon0)-0.5)*KX; }
 function latToZ(lat){ return ((META.lat1-lat)/(META.lat1-META.lat0)-0.5)*KY; }
 function xToLon(x){ return META.lon0+(x/KX+0.5)*(META.lon1-META.lon0); }
@@ -1207,11 +1209,24 @@ scene.add(new THREE.AmbientLight(0xffffff,0.47));
 var sun=new THREE.DirectionalLight(0xfff4e0,0.95); sun.position.set(-32,32,-24); scene.add(sun);
 var fill=new THREE.DirectionalLight(0x8899bb,0.22); fill.position.set(25,20,30); scene.add(fill);
 var controls=new THREE.OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true; controls.dampingFactor=0.08; controls.maxPolarAngle=Math.PI*0.47;
+controls.enableDamping=true; controls.dampingFactor=0.08; controls.maxPolarAngle=Math.PI*0.585;
 controls.minDistance=0.4; controls.maxDistance=95;
 var HOME={pos:new THREE.Vector3(-25,17,0.001),tgt:new THREE.Vector3(0,1.5,0)};
 function resetView(){ camera.position.copy(HOME.pos); controls.target.copy(HOME.tgt); }
 resetView();
+/* stand in the 大甲溪 valley and look UP at the highest peak */
+function skyward(){
+  var vx=lonToX(120.87),vz=latToZ(24.235);
+  var gy=sampleElev(vx,vz)*0.001*EX;
+  camera.position.set(vx,gy+0.20,vz);
+  controls.target.set(hiX,hiV*0.001*EX*0.82,hiZ);
+}
+/* keep the camera just above the ground so orbiting low never sinks under the terrain */
+function camFloor(){
+  var x=camera.position.x,z=camera.position.z;
+  var gy=inside(x,z)?sampleElev(x,z)*0.001*EX:minElev*0.001*EX;
+  var minY=gy+0.08; if(camera.position.y<minY) camera.position.y=minY;
+}
 /* ---- overlays: contours, water, roads, labels ---- */
 var gOverlay=new THREE.Group(); scene.add(gOverlay);
 var gWater=new THREE.Group(),gRoads=new THREE.Group(),gLabels=new THREE.Group(); gOverlay.add(gWater); gOverlay.add(gRoads); gOverlay.add(gLabels);
@@ -1252,16 +1267,22 @@ function addLabel(name,lon,lat,fs,fill,hh,off,tier){
   var sp=makeSprite(name,fs,fill,hh); gLabels.add(sp);
   labelItems.push({sp:sp,x:x,z:z,ground:sampleElev(x,z),off:off,tier:tier});
 }
-function makeDot(){ var cv=document.createElement('canvas'); cv.width=cv.height=64; var c=cv.getContext('2d');
-  c.beginPath(); c.arc(32,32,18,0,7); c.fillStyle='#e01818'; c.fill(); c.lineWidth=6; c.strokeStyle='#fff'; c.stroke();
-  var t=new THREE.CanvasTexture(cv); t.minFilter=THREE.LinearFilter; t.encoding=THREE.sRGBEncoding;
-  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,depthTest:false,transparent:true,sizeAttenuation:false})); sp.scale.set(0.013,0.013,1); sp.renderOrder=1000; return sp; }
-function addMarker(lon,lat){ var x=lonToX(lon),z=latToZ(lat); if(!inside(x,z))return; var sp=makeDot(); gLabels.add(sp); labelItems.push({sp:sp,x:x,z:z,ground:sampleElev(x,z),off:0.35,tier:0}); }
+/* ground-conformed marker: a flat disc laid ON the terrain (no billboard parallax) */
+var groundMarkers=[];
+function addGroundMarker(lon,lat){ var x=lonToX(lon),z=latToZ(lat); if(!inside(x,z))return;
+  var g=new THREE.Group();
+  var rC=new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true,opacity:0.96}); rC.color.convertSRGBToLinear();
+  var dC=new THREE.MeshBasicMaterial({color:0xe01818,depthTest:false}); dC.color.convertSRGBToLinear();
+  var ring=new THREE.Mesh(new THREE.CircleGeometry(0.10,44),rC); ring.rotation.x=-Math.PI/2; ring.renderOrder=1000; ring.position.y=0.002;
+  var dot=new THREE.Mesh(new THREE.CircleGeometry(0.062,44),dC); dot.rotation.x=-Math.PI/2; dot.renderOrder=1001; dot.position.y=0.004;
+  g.add(ring); g.add(dot); gLabels.add(g);
+  groundMarkers.push({obj:g,x:x,z:z,ground:sampleElev(x,z)});
+}
 VECT.places.forEach(function(p){
-  if(p.n==='大茅埔'){ addMarker(p.lon,p.lat); addLabel(p.n,p.lon,p.lat,42,'#b00000',0.98,0.95,0); }
-  else if(p.c==='big') addLabel(p.n,p.lon,p.lat,40,'#33240f',0.95,0.9,1);
-  else if(p.c==='mid') addLabel(p.n,p.lon,p.lat,36,'#26200f',0.82,0.75,1);
-  else addLabel(p.n,p.lon,p.lat,26,'#20242c',0.55,0.5,2);
+  if(p.n==='大茅埔'){ addGroundMarker(p.lon,p.lat); addLabel(p.n,p.lon,p.lat,52,'#b00000',1.34,1.05,0); }
+  else if(p.c==='big') addLabel(p.n,p.lon,p.lat,50,'#33240f',1.30,1.0,1);
+  else if(p.c==='mid') addLabel(p.n,p.lon,p.lat,44,'#26200f',1.08,0.82,1);
+  else addLabel(p.n,p.lon,p.lat,34,'#20242c',0.74,0.55,2);
 });
 /* exaggeration */
 var EX=2.0;
@@ -1275,6 +1296,7 @@ function applyExaggeration(withNormals){
   bundles.forEach(function(b){ var p=b.geo.attributes.position.array;
     for(var t=0;t<b.gnd.length;t++) p[t*3+1]=(b.gnd[t]+b.off)*s; b.geo.attributes.position.needsUpdate=true; });
   labelItems.forEach(function(it){ it.sp.position.set(it.x,it.ground*s+it.off,it.z); });
+  groundMarkers.forEach(function(m){ m.obj.position.set(m.x,m.ground*s+0.006,m.z); });
 }
 applyExaggeration(true);
 /* hover */
@@ -1304,6 +1326,7 @@ var exSlider=document.getElementById('ex'),exVal=document.getElementById('exval'
 exSlider.addEventListener('input',function(){ EX=parseFloat(exSlider.value); exVal.textContent=EX.toFixed(1)+'×'; applyExaggeration(false); });
 exSlider.addEventListener('change',function(){ applyExaggeration(true); });
 document.getElementById('reset').addEventListener('click',resetView);
+document.getElementById('skyward').addEventListener('click',skyward);
 document.getElementById('ck_lab').addEventListener('change',function(e){ gLabels.visible=e.target.checked; });
 document.getElementById('ck_road').addEventListener('change',function(e){ gRoads.visible=e.target.checked; });
 document.getElementById('ck_wat').addEventListener('change',function(e){ gWater.visible=e.target.checked; });
@@ -1318,7 +1341,7 @@ addEventListener('resize',function(){ camera.aspect=innerWidth/innerHeight; came
 var loadEl=document.getElementById('loading');
 function updateLOD(){ var d=camera.position.distanceTo(controls.target);
   for(var li=0;li<labelItems.length;li++){ var t=labelItems[li].tier; labelItems[li].sp.visible=(t===0)||(t===1&&d<85)||(t===2&&d<12); } }
-(function animate(){ requestAnimationFrame(animate); controls.update(); updateLOD();
+(function animate(){ requestAnimationFrame(animate); controls.update(); camFloor(); updateLOD();
   northEl.style.transform='rotate('+(controls.getAzimuthalAngle()*180/Math.PI).toFixed(1)+'deg)';
   renderer.render(scene,camera); if(loadEl){ loadEl.remove(); loadEl=null; } })();
 } /* end boot */
