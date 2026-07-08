@@ -31,6 +31,7 @@ canvas{display:block;touch-action:none}
 #north{font-weight:bold;color:#ff8a7a;font-size:15px}
 #src{position:fixed;bottom:2px;left:50%;transform:translateX(-50%);font-size:10px;color:#66708a;z-index:10}
 #loading{position:fixed;inset:0;background:#0e1420;display:flex;align-items:center;justify-content:center;font-size:16px;color:#aab4c8;z-index:99}
+.tog{display:none;box-sizing:border-box}
 @media (pointer:coarse),(max-width:600px){
   #title{max-width:calc(100vw - 24px)} #title h1{font-size:14px} #title .sub{display:none}
   #ctrl{top:auto;bottom:64px;right:10px;width:150px} #ctrl .hint{font-size:10px;line-height:1.4}
@@ -38,6 +39,10 @@ canvas{display:block;touch-action:none}
   #northbox{width:34px;height:34px;bottom:12px} #north{font-size:13px}
   #hover{font-size:11px;max-width:92vw;padding:5px 9px}
   #src{font-size:8.5px;max-width:96vw;text-align:center}
+  .tog{display:block;width:100%;background:#2a3a5c;color:#e8e8e8;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:4px 0;font-family:inherit;font-size:11px;margin-bottom:6px;cursor:pointer}
+  .panel.mini{padding:6px 8px}
+  .panel.mini > *:not(.tog){display:none}
+  .panel.mini .tog{margin-bottom:0}
 }
 </style></head><body>
 <div id="loading">載入地形・衛星影像中…</div>
@@ -46,6 +51,7 @@ canvas{display:block;touch-action:none}
 <div id="hover"></div>
 <div id="northbox"><span id="north">N↑</span></div>
 <div id="ctrl" class="panel">
+  <button class="tog" id="tog_ctrl">設定 ▾</button>
   <div class="seg"><button id="mode_cont" class="on">等高線</button><button id="mode_sat">衛星</button></div>
   <label>垂直誇張 <span id="exval">2.0×</span><input type="range" id="ex" min="0.5" max="4" step="0.1" value="2.0"></label>
   <div class="togs" style="margin-top:6px;font-size:12px"><label><input type="checkbox" id="ck_lab" checked> 地名</label><label><input type="checkbox" id="ck_road" checked> 道路</label><label><input type="checkbox" id="ck_wat" checked> 水文</label></div>
@@ -53,6 +59,7 @@ canvas{display:block;touch-action:none}
   <div class="hint">左鍵拖曳＝旋轉｜滾輪＝縮放｜右鍵或方向鍵＝平移</div>
 </div>
 <div id="legend" class="panel">
+  <button class="tog" id="tog_legend">圖例 ▾</button>
   <div class="cap">高程（m）</div>
   <div class="wrap"><div class="bar"></div>
   <div class="ticks"><span>≥2000</span><span>1600</span><span>1150</span><span>750</span><span>300</span></div></div>
@@ -1333,6 +1340,7 @@ var exSlider=document.getElementById('ex'),exVal=document.getElementById('exval'
 exSlider.addEventListener('input',function(){ EX=parseFloat(exSlider.value); exVal.textContent=EX.toFixed(1)+'×'; applyExaggeration(false); });
 exSlider.addEventListener('change',function(){ applyExaggeration(true); });
 document.getElementById('reset').addEventListener('click',resetView);
+(function(){function bindTog(t,p,l){var b=document.getElementById(t),q=document.getElementById(p);if(!b||!q)return;b.addEventListener('click',function(){var m=q.classList.toggle('mini');b.textContent=l+(m?' \u25b8':' \u25be');});}bindTog('tog_ctrl','ctrl','\u8a2d\u5b9a');bindTog('tog_legend','legend','\u5716\u4f8b');})();
 document.getElementById('ck_lab').addEventListener('change',function(e){ gLabels.visible=e.target.checked; });
 document.getElementById('ck_road').addEventListener('change',function(e){ gRoads.visible=e.target.checked; });
 document.getElementById('ck_wat').addEventListener('change',function(e){ gWater.visible=e.target.checked; });
